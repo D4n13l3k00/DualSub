@@ -82,7 +82,8 @@ class App:
             led_thread.start()
         play_thread.start()
 
-    def thread_led(self, chunks, chunk_size: int):
+    @staticmethod
+    def thread_led(chunks, chunk_size: int):
         for i in chunks:
             if i == 2:
                 subprocess.call(["xset", "led", "named", "Scroll Lock"])
