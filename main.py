@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.progress import track
 
 
-class App:
+class DualSub:
     def __init__(self):
         self.c = Console()
 
@@ -40,20 +40,19 @@ class App:
                 )
         for j in self.joysticks:
             j.stop_rumble()
-        audio_file = args.input
+        audio_file = args.input  # type: str
         if not Path(audio_file).exists():
             self.c.print(f"File {audio_file} does not exist", style="bold red")
             return
-        audio = AudioSegment.from_file(audio_file)
-        chunk_size = 100
+        audio = AudioSegment.from_file(audio_file)  # type: AudioSegment
+        chunk_size = 100  # ms
         for i in track(
-            range(0, len(audio), chunk_size),
-            total=len(range(0, len(audio), chunk_size)),
+            list(range(0, len(audio), chunk_size)),
             description="[b green]Chunking audio[/]",
         ):
-            chunk = audio[i : i + chunk_size]
+            chunk = audio[i : i + chunk_size]  # type: AudioSegment
 
-            low_hz = chunk.low_pass_filter(80)
+            low_hz = chunk.low_pass_filter(80)  # type: AudioSegment
             if low_hz.max > 12500:
                 self.bass_chunks.append(2)
             elif low_hz.max > 10000:
@@ -74,16 +73,13 @@ class App:
         if args.led:
             led_thread = Thread(
                 target=self.thread_led,
-                args=(
-                    self.bass_chunks,
-                    chunk_size,
-                ),
+                args=(self.bass_chunks,),
             )
             led_thread.start()
         play_thread.start()
 
     @staticmethod
-    def thread_led(chunks, chunk_size: int):
+    def thread_led(chunks):
         for i in chunks:
             if i == 2:
                 subprocess.call(["xset", "led", "named", "Scroll Lock"])
@@ -120,5 +116,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    ex = App()
+    ex = DualSub()
     ex.run(args)
