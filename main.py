@@ -1,3 +1,4 @@
+import subprocess
 import os
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
@@ -22,15 +23,24 @@ class App:
         self.joysticks = [
             pygame.joystick.Joystick(x) for x in range(pygame.joystick.get_count())
         ]
-        self.vibro_chunks = []
+        self.bass_chunks = []
 
-    def run(self, audio_file: str):
+    def run(self, args):
+        if os.name == "nt":
+            self.c.print("[--led] Windows is not supported yet")
+            args.led = False
         if not self.joysticks:
-            return self.c.print(
-                "[red]No joysticks found. Please connect one and try again.[/]"
-            )
+            if args.led:
+                self.c.print(
+                    "[red]No joystick found. Please connect a joystick and try again. Program still work with LED arg[/red]"
+                )
+            else:
+                return self.c.print(
+                    "[red]No joysticks found. Please connect one and try again.[/]"
+                )
         for j in self.joysticks:
             j.stop_rumble()
+        audio_file = args.input
         if not Path(audio_file).exists():
             self.c.print(f"File {audio_file} does not exist", style="bold red")
             return
@@ -45,21 +55,40 @@ class App:
 
             low_hz = chunk.low_pass_filter(80)
             if low_hz.max > 12500:
-                self.vibro_chunks.append(2)
+                self.bass_chunks.append(2)
             elif low_hz.max > 10000:
-                self.vibro_chunks.append(1)
+                self.bass_chunks.append(1)
             else:
-                self.vibro_chunks.append(0)
-        t = Thread(
-            target=self.thread_rumble,
-            args=(
-                self.vibro_chunks,
-                chunk_size,
-            ),
-        )
-        t2 = Thread(target=playback.play, args=(audio,))
-        t.start()
-        t2.start()
+                self.bass_chunks.append(0)
+
+        play_thread = Thread(target=playback.play, args=(audio,))
+        if self.joysticks:
+            vibro_thread = Thread(
+                target=self.thread_rumble,
+                args=(
+                    self.bass_chunks,
+                    chunk_size,
+                ),
+            )
+            vibro_thread.start()
+        if args.led:
+            led_thread = Thread(
+                target=self.thread_led,
+                args=(
+                    self.bass_chunks,
+                    chunk_size,
+                ),
+            )
+            led_thread.start()
+        play_thread.start()
+
+    def thread_led(self, chunks, chunk_size: int):
+        for i in chunks:
+            if i == 2:
+                subprocess.call(["xset", "led", "named", "Scroll Lock"])
+            else:
+                subprocess.call(["xset", "-led", "named", "Scroll Lock"])
+            time.sleep(0.1)
 
     def thread_rumble(self, chunks, chunk_size: int):
         for i in track(
@@ -70,7 +99,7 @@ class App:
             if i == 2:
                 self.joysticks[0].rumble(1, 1, chunk_size // 10)
             elif i == 1:
-                self.joysticks[0].rumble(1, 1, chunk_size // 100)
+                self.joysticks[0].rumble(0.5, 0.5, chunk_size // 100)
             else:
                 self.joysticks[0].stop_rumble()
             time.sleep(0.1)
@@ -81,6 +110,14 @@ if __name__ == "__main__":
         description='Turn your DualShock4 into "subwoofer"'
     )
     parser.add_argument("-i", "--input", help="Input audio file", required=True)
+    parser.add_argument(
+        "-l",
+        "--led",
+        help="Turn keyboard blinking (If ur kbd use ScrollLock for LED)",
+        default=False,
+        action="store_true",
+    )
+
     args = parser.parse_args()
     ex = App()
-    ex.run(args.input)
+    ex.run(args)
