@@ -25,9 +25,24 @@ class DualSub:
         ]
         self.bass_chunks = []
 
+    def chunk_bass_audio(self, audio: AudioSegment, chunk_size: int):
+        for i in track(
+            list(range(0, len(audio), chunk_size)),
+            description="[b green]Chunking audio[/]",
+        ):
+            chunk = audio[i : i + chunk_size]  # type: AudioSegment
+
+            low_hz = chunk.low_pass_filter(80)  # type: AudioSegment
+            if low_hz.max > 12500:
+                self.bass_chunks.append(2)
+            elif low_hz.max > 10000:
+                self.bass_chunks.append(1)
+            else:
+                self.bass_chunks.append(0)
+
     def run(self, args):
-        if os.name == "nt":
-            self.c.print("[--led] Windows is not supported yet")
+        if os.name != "posix":
+            self.c.print("[--led] `{}` is not supported yet".format(os.name))
             args.led = False
         if not self.joysticks:
             if args.led:
@@ -46,19 +61,7 @@ class DualSub:
             return
         audio = AudioSegment.from_file(audio_file)  # type: AudioSegment
         chunk_size = 100  # ms
-        for i in track(
-            list(range(0, len(audio), chunk_size)),
-            description="[b green]Chunking audio[/]",
-        ):
-            chunk = audio[i : i + chunk_size]  # type: AudioSegment
-
-            low_hz = chunk.low_pass_filter(80)  # type: AudioSegment
-            if low_hz.max > 12500:
-                self.bass_chunks.append(2)
-            elif low_hz.max > 10000:
-                self.bass_chunks.append(1)
-            else:
-                self.bass_chunks.append(0)
+        self.chunk_bass_audio(audio, chunk_size)
 
         play_thread = Thread(target=playback.play, args=(audio,))
         if self.joysticks:
